@@ -118,19 +118,9 @@ String::String(double value, unsigned char decimalPlaces) {
     *this = dtostrf(value, (decimalPlaces + 2), decimalPlaces, buf);
 }
 
-String::~String() {
-    invalidate();
-}
-
 /*********************************************/
 /*  Memory Management                        */
 /*********************************************/
-
-inline void String::init(void) {
-    setSSO(true);
-    setLen(0);
-    wbuffer()[0] = 0;
-}
 
 void String::invalidate(void) {
     if(!isSSO() && wbuffer())
@@ -561,10 +551,6 @@ unsigned char String::endsWith(const String &s2) const {
 /*********************************************/
 /*  Character Access                         */
 /*********************************************/
-
-char String::charAt(unsigned int loc) const {
-    return operator[](loc);
-}
 
 void String::setCharAt(unsigned int loc, char c) {
     if (loc < len())
