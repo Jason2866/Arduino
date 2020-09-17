@@ -159,11 +159,6 @@ int copy_raw(const uint32_t src_addr,
 	gzip = true;
     }
     while (left > 0) {
-        if (!verify) {
-           if (SPIEraseSector(daddr/buffer_size)) {
-               return 2;
-           }
-        }
         if (!gzip) {
             if (SPIRead(saddr, buffer, buffer_size)) {
                 return 3;
@@ -190,8 +185,25 @@ int copy_raw(const uint32_t src_addr,
                 return 9;
             }
         } else {
-            if (SPIWrite(daddr, buffer, buffer_size)) {
-                return 4;
+            // Special treatment for address 0 (bootloader).  Only erase and
+            // rewrite if the data is different (i.e. very rarely).
+            bool skip = false;
+            if (daddr == 0) {
+                if (SPIRead(daddr, buffer2, buffer_size)) {
+                    return 4;
+                }
+                if (!memcmp(buffer2, buffer, buffer_size)) {
+                    ets_putc('B'); // Note we skipped the bootloader in output
+                    skip = true;   // And skip erase/write
+                }
+            }
+            if (!skip) {
+                if (SPIEraseSector(daddr/buffer_size)) {
+                   return 2;
+                }
+                if (SPIWrite(daddr, buffer, buffer_size)) {
+                    return 4;
+                }
             }
         }
         saddr += buffer_size;
@@ -229,8 +241,10 @@ int main()
         ets_wdt_enable();
 
         ets_putc('0'+res); ets_putc('\n');
-
-/** disabled in 2.7.3
+#if 0
+	//devyte: this verify step below (cmp:) only works when the end of copy operation above does not overwrite the 
+	//beginning of the image in the empty area, see #7458. Disabling for now. 
+        //TODO: replace the below verify with hash type, crc, or similar.
         // Verify the copy
         ets_putc('c'); ets_putc('m'); ets_putc('p'); ets_putc(':');
         if (res == 0) {
@@ -238,9 +252,9 @@ int main()
             res = copy_raw(cmd.args[0], cmd.args[1], cmd.args[2], true);
             ets_wdt_enable();
             }
-        ets_putc('0'+res); ets_putc('\n');
-**/
 
+        ets_putc('0'+res); ets_putc('\n');
+#endif	    
         if (res == 0) {
             cmd.action = ACTION_LOAD_APP;
             cmd.args[0] = cmd.args[1];
