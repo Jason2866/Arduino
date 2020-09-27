@@ -278,11 +278,11 @@ class String {
         // parsing/conversion
         long toInt(void) const;
         float toFloat(void) const;
-	double toDouble(void) const;
+        double toDouble(void) const;
 
     protected:
         // Contains the string info when we're not in SSO mode
-        struct _ptr { 
+        struct _ptr {
             char *   buff;
             uint16_t cap;
             uint16_t len;
@@ -306,7 +306,7 @@ class String {
         inline void setSSO(bool set) { sso.isHeap = !set; }
         inline void setLen(int len) { if (isSSO()) sso.len = len; else ptr.len = len; }
         inline void setCapacity(int cap) { if (!isSSO()) ptr.cap = cap; }
-	inline void setBuffer(char *buff) { if (!isSSO()) ptr.buff = buff; }
+        inline void setBuffer(char *buff) { if (!isSSO()) ptr.buff = buff; }
         // Buffer accessor functions
         inline const char *buffer() const { return (const char *)(isSSO() ? sso.buff : ptr.buff); }
         inline char *wbuffer() const { return isSSO() ? const_cast<char *>(sso.buff) : ptr.buff; } // Writable version of buffer
