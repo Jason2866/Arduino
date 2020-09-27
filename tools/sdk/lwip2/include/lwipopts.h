@@ -3551,6 +3551,12 @@
 #error LWIP_FEATURES must be defined
 #endif
 
+#define PPPOS_SUPPORT       IP_NAPT         // because we don't have proxyarp yet
+#define PPP_SUPPORT         PPPOS_SUPPORT
+#define PPP_SERVER          1
+#define PPP_DEBUG           ULWIPDEBUG
+#define PRINTPKT_SUPPORT    ULWIPDEBUG
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -3618,6 +3624,9 @@ struct netif;
 #endif
 //#define LWIP_ERR_T s8
 LWIP_ERR_T lwip_unhandled_packet (struct pbuf* pbuf, struct netif* netif);
+
+// called when STA OR AP is set up or down
+void netif_status_changed (struct netif*);
 
 /*
    --------------------------------------------------
