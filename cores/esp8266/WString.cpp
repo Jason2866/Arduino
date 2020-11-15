@@ -55,14 +55,6 @@ String::String(StringSumHelper &&rval) noexcept {
     move(rval);
 }
 
-String::String(char c) {
-    init();
-    char buf[2];
-    buf[0] = c;
-    buf[1] = 0;
-    *this = buf;
-}
-
 String::String(unsigned char value, unsigned char base) {
     init();
     char buf[1 + 8 * sizeof(unsigned char)];
@@ -162,7 +154,7 @@ unsigned char String::changeBuffer(unsigned int maxStrLen) {
     size_t newSize = (maxStrLen + 16) & (~0xf);
     // Make sure we can fit newsize in the buffer
     if (newSize > CAPACITY_MAX) {
-        return false;
+        return 0;
     }
     uint16_t oldLen = len();
     char *newbuffer = (char *)realloc(isSSO() ? nullptr : wbuffer(), newSize);
@@ -263,7 +255,7 @@ unsigned char String::concat(const String &s) {
             return 0;
         memmove_P(wbuffer() + len(), buffer(), len());
         setLen(newlen);
-        wbuffer()[len()] = 0;
+        wbuffer()[newlen] = 0;
         return 1;
     } else {
         return concat(s.buffer(), s.len());
@@ -291,22 +283,17 @@ unsigned char String::concat(const char *cstr) {
 }
 
 unsigned char String::concat(char c) {
-    char buf[2];
-    buf[0] = c;
-    buf[1] = 0;
-    return concat(buf, 1);
+    return concat(&c, 1);
 }
 
 unsigned char String::concat(unsigned char num) {
     char buf[1 + 3 * sizeof(unsigned char)];
-    sprintf(buf, "%d", num);
-    return concat(buf, strlen(buf));
+    return concat(buf, sprintf(buf, "%d", num));
 }
 
 unsigned char String::concat(int num) {
     char buf[2 + 3 * sizeof(int)];
-    sprintf(buf, "%d", num);
-    return concat(buf, strlen(buf));
+    return concat(buf, sprintf(buf, "%d", num));
 }
 
 unsigned char String::concat(unsigned int num) {
@@ -317,8 +304,7 @@ unsigned char String::concat(unsigned int num) {
 
 unsigned char String::concat(long num) {
     char buf[2 + 3 * sizeof(long)];
-    sprintf(buf, "%ld", num);
-    return concat(buf, strlen(buf));
+    return concat(buf, sprintf(buf, "%ld", num));
 }
 
 unsigned char String::concat(unsigned long num) {
@@ -427,8 +413,7 @@ StringSumHelper &operator +(const StringSumHelper &lhs, double num) {
     return a;
 }
 
-StringSumHelper &operator +(const StringSumHelper &lhs, const __FlashStringHelper *rhs)
-{
+StringSumHelper &operator +(const StringSumHelper &lhs, const __FlashStringHelper *rhs) {
     StringSumHelper &a = const_cast<StringSumHelper &>(lhs);
     if (!a.concat(rhs))
         a.invalidate();
@@ -581,10 +566,6 @@ void String::getBytes(unsigned char *buf, unsigned int bufsize, unsigned int ind
 /*  Search                                   */
 /*********************************************/
 
-int String::indexOf(char c) const {
-    return indexOf(c, 0);
-}
-
 int String::indexOf(char ch, unsigned int fromIndex) const {
     if (fromIndex >= len())
         return -1;
@@ -594,34 +575,34 @@ int String::indexOf(char ch, unsigned int fromIndex) const {
     return temp - buffer();
 }
 
-int String::indexOf(const String &s2) const {
-    return indexOf(s2, 0);
-}
-
-int String::indexOf(const String &s2, unsigned int fromIndex) const {
+int String::indexOf(const char *s2, unsigned int fromIndex) const {
     if (fromIndex >= len())
         return -1;
-    const char *found = strstr(buffer() + fromIndex, s2.buffer());
+    const char *found = strstr_P(buffer() + fromIndex, s2);
     if (found == NULL)
         return -1;
     return found - buffer();
 }
 
-int String::lastIndexOf(char theChar) const {
-    return lastIndexOf(theChar, len() - 1);
+int String::indexOf(const String &s2, unsigned int fromIndex) const {
+    return indexOf(s2.c_str(), fromIndex);
+}
+
+int String::lastIndexOf(char ch) const {
+    return lastIndexOf(ch, len() - 1);
 }
 
 int String::lastIndexOf(char ch, unsigned int fromIndex) const {
     if (fromIndex >= len())
         return -1;
-    char *wbuffer = this->wbuffer();
-    char tempchar = wbuffer[fromIndex + 1]; // save the replaced character
-    wbuffer[fromIndex + 1] = '\0';
-    char *temp = strrchr(wbuffer, ch);
-    wbuffer[fromIndex + 1] = tempchar; // restore character
+    char *writeTo = wbuffer();
+    char tempchar = writeTo[fromIndex + 1]; // save the replaced character
+    writeTo[fromIndex + 1] = '\0';
+    char *temp = strrchr(writeTo, ch);
+    writeTo[fromIndex + 1] = tempchar; // restore character
     if (temp == NULL)
         return -1;
-    return temp - wbuffer;
+    return temp - writeTo;
 }
 
 int String::lastIndexOf(const String &s2) const {
@@ -655,11 +636,11 @@ String String::substring(unsigned int left, unsigned int right) const {
         return out;
     if (right > len())
         right = len();
-    char *wbuffer = this->wbuffer();
-    char tempchar = wbuffer[right]; // save the replaced character
-    wbuffer[right] = '\0';
-    out = wbuffer + left; // pointer arithmetic
-    wbuffer[right] = tempchar; // restore character
+    char *writeTo = wbuffer();
+    char tempchar = writeTo[right]; // save the replaced character
+    writeTo[right] = '\0';
+    out = writeTo + left; // pointer arithmetic
+    writeTo[right] = tempchar; // restore character
     return out;
 }
 
@@ -676,7 +657,7 @@ void String::replace(char find, char replace) {
     }
 }
 
-void String::replace(const String& find, const String& replace) {
+void String::replace(const String &find, const String &replace) {
     if (len() == 0 || find.len() == 0)
         return;
     int diff = replace.len() - find.len();
@@ -720,13 +701,6 @@ void String::replace(const String& find, const String& replace) {
             index--;
         }
     }
-}
-
-void String::remove(unsigned int index) {
-    // Pass the biggest integer as the count. The remove method
-    // below will take care of truncating it at the end of the
-    // string.
-    remove(index, (unsigned int)-1);
 }
 
 void String::remove(unsigned int index, unsigned int count) {

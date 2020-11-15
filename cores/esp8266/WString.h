@@ -53,7 +53,7 @@ class String {
         // if the initial value is null or invalid, or if memory allocation
         // fails, the string will be marked as invalid (i.e. "if (s)" will
         // be false).
-        String() {
+        String() __attribute__((always_inline)) { // See init()
             init();
         }
         String(const char *cstr);
@@ -61,7 +61,12 @@ class String {
         String(const __FlashStringHelper *str);
         String(String &&rval) noexcept;
         String(StringSumHelper &&rval) noexcept;
-        explicit String(char c);
+        explicit String(char c) {
+            sso.buff[0] = c;
+            sso.buff[1] = 0;
+            sso.len     = 1;
+            sso.isHeap  = 0;
+        }
         explicit String(unsigned char, unsigned char base = 10);
         explicit String(int, unsigned char base = 10);
         explicit String(unsigned int, unsigned char base = 10);
@@ -223,7 +228,7 @@ class String {
         }
         void setCharAt(unsigned int index, char c);
         char operator [](unsigned int index) const;
-        char& operator [](unsigned int index);
+        char &operator [](unsigned int index);
         void getBytes(unsigned char *buf, unsigned int bufsize, unsigned int index = 0) const;
         void toCharArray(char *buf, unsigned int bufsize, unsigned int index = 0) const {
             getBytes((unsigned char *) buf, bufsize, index);
@@ -235,10 +240,12 @@ class String {
         const char *end() const { return c_str() + length(); }
 
         // search
-        int indexOf(char ch) const;
-        int indexOf(char ch, unsigned int fromIndex) const;
-        int indexOf(const String &str) const;
-        int indexOf(const String &str, unsigned int fromIndex) const;
+        int indexOf(char ch, unsigned int fromIndex = 0) const;
+        int indexOf(const char *str, unsigned int fromIndex = 0) const;
+        int indexOf(const __FlashStringHelper *str, unsigned int fromIndex = 0) const {
+            return indexOf((const char*)str, fromIndex);
+        }
+        int indexOf(const String &str, unsigned int fromIndex = 0) const;
         int lastIndexOf(char ch) const;
         int lastIndexOf(char ch, unsigned int fromIndex) const;
         int lastIndexOf(const String &str) const;
@@ -266,8 +273,9 @@ class String {
         void replace(const __FlashStringHelper *find, const __FlashStringHelper *replace) {
             this->replace(String(find), String(replace));
         }
-        void remove(unsigned int index);
-        void remove(unsigned int index, unsigned int count);
+        // Pass the biggest integer if the count is not specified.
+        // The remove method below will take care of truncating it at the end of the string.
+        void remove(unsigned int index, unsigned int count = (unsigned int)-1);
         void toLowerCase(void);
         void toUpperCase(void);
         void trim(void);
@@ -301,7 +309,13 @@ class String {
         unsigned int len() const { return isSSO() ? sso.len : ptr.len; }
         unsigned int capacity() const { return isSSO() ? (unsigned int)SSOSIZE - 1 : ptr.cap; } // Size of max string not including terminal NUL
         void setSSO(bool set) { sso.isHeap = !set; }
-        void setLen(int len) { if (isSSO()) sso.len = len; else ptr.len = len; }
+        void setLen(int len) {
+            if (isSSO()) {
+                setSSO(true); // Avoid emitting of bitwise EXTRACT-AND-OR ops (store-merging optimization)
+                sso.len = len;
+            } else
+                ptr.len = len;
+        }
         void setCapacity(int cap) { if (!isSSO()) ptr.cap = cap; }
         void setBuffer(char *buff) { if (!isSSO()) ptr.buff = buff; }
         // Buffer accessor functions
@@ -309,10 +323,16 @@ class String {
         char *wbuffer() const { return isSSO() ? const_cast<char *>(sso.buff) : ptr.buff; } // Writable version of buffer
 
     protected:
-        void init(void) {
-            sso.buff[0] = 0;
-            sso.len     = 0;
-            sso.isHeap  = 0;
+        void init(void) __attribute__((always_inline)) {
+            sso.buff[0]  = 0; // In the Xtensa ISA, in fact, 32-bit store insn ("S32I.N") is one-byte shorter than 8-bit one ("S8I").
+            sso.buff[1]  = 0; // Thanks to store-merging optimization, these 9 lines emit only 3 insns:
+            sso.buff[2]  = 0; //   "MOVI.N aX,0", "S32I.N aX,a2,0" and "S32I.N aX,a2,8" (6 bytes in total)
+            sso.buff[3]  = 0;
+            sso.buff[8]  = 0; // Unfortunately, GCC seems not to re-evaluate the cost of inlining after the store-merging optimizer stage,
+            sso.buff[9]  = 0; // `always_inline` attribute is necessary in order to assure inlining.
+            sso.buff[10] = 0;
+            sso.len      = 0;
+            sso.isHeap   = 0;
         }
         void invalidate(void);
         unsigned char changeBuffer(unsigned int maxStrLen);
